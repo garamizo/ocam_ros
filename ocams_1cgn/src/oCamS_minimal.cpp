@@ -25,7 +25,7 @@
 #include <opencv2/core/utility.hpp>
 #include <opencv2/ximgproc/disparity_filter.hpp>
 #include <opencv2/imgproc.hpp>
-#include <opencv2/xfeatures2d.hpp>
+// #include <opencv2/xfeatures2d.hpp>
 #include <opencv2/features2d.hpp>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -33,7 +33,7 @@
 #include "myahrs_plus.hpp"
 
 using namespace cv;
-using namespace cv::xfeatures2d;
+// using namespace cv::xfeatures2d;
 using namespace cv::ximgproc;
 using namespace std;
 
@@ -150,7 +150,7 @@ public:
 
 
 using namespace WithrobotIMU;
-class MyAhrsDriverForROS : public iMyAhrsPlus
+class MyAhrsDriverForROS : public iMyAhrsPlus 
 {
 public:
     SensorData sensor_data_;
@@ -331,27 +331,8 @@ public:
 
 
 class oCamStereoROS {
-    enum MatchingAlg{ STEREO_BM=0, STEREO_SGBM=1, STEREO_HH=2, STEREO_3WAY=3, STEREO_HH4=4 };
 private:
-    struct StereoParams
-    {
-        MatchingAlg mode;
-        int preFilterType;
-        int preFilterSize;
-        int preFilterCap;
-        int SADWindowSize;
-        int minDisparity;
-        int numDisparities;
-        int textureThreshold;
-        int uniquenessRatio;
-        int speckleRange;
-        int speckleWindowSize;
-        int disp12MaxDiff;
-        int p1;
-        int p2;
 
-    };
-    StereoParams state;
     Withrobot::Camera* camera_ros;
     int resolution_;
     double frame_rate_;
@@ -420,27 +401,12 @@ private:
         return ptr;
     }
 
-#if 1
     void publishCamInfo(const ros::Publisher& pub_cam_info, sensor_msgs::CameraInfo& cam_info_msg, ros::Time t)
     {
         cam_info_msg.header.stamp = t;
         pub_cam_info.publish(cam_info_msg);
     }
-#else
-    /* \brief Publish the informations of a camera with a ros Publisher
-     * \param cam_info_msg : the information message to publish
-     * \param pub_cam_info : the publisher object to use
-     * \param t : the ros::Time to stamp the message
-     */
-    void publishCamInfo(sensor_msgs::CameraInfoPtr cam_info_msg, ros::Publisher pub_cam_info, ros::Time t)
-    {
-        static int seq = 0;
-        cam_info_msg->header.stamp = t;
-        cam_info_msg->header.seq = seq;
-        pub_cam_info.publish(cam_info_msg);
-        seq++;
-    }
-#endif
+
 
     /* \brief Publish a cv::Mat image with a ros Publisher
      * \param img : the image to publish
@@ -451,253 +417,6 @@ private:
     void publishImage(cv::Mat img, image_transport::Publisher &pub_img, std::string img_frame_id, ros::Time t, std::string encoding_id)
     {
         pub_img.publish(imageToROSmsg(img, encoding_id, img_frame_id, t));
-    }
-
-    /* \brief Publish a cv::Mat depth image with a ros Publisher
-     * \param depth : the depth image to publish
-     * \param pub_depth : the publisher object to use
-     * \param depth_frame_id : the id of the reference frame of the depth image
-     * \param t : the ros::Time to stamp the depth image
-     */
-    void publishDepth(cv::Mat depth, image_transport::Publisher &pub_depth, std::string depth_frame_id, ros::Time t, bool openniDepthMode)
-    {
-        std::string encoding;
-#if 1
-        if (openniDepthMode) {
-            depth *= 1000.0f;
-            depth.convertTo(depth, CV_16UC1); // in mm, rounded
-            encoding = sensor_msgs::image_encodings::TYPE_16UC1;
-        } else {
-            encoding = sensor_msgs::image_encodings::TYPE_32FC1;
-        }
-#else
-        encoding = sensor_msgs::image_encodings::TYPE_32FC1;
-#endif
-        pub_depth.publish(imageToROSmsg(depth, encoding, depth_frame_id, t));
-    }
-
-#if 0
-    /* \brief Publish a pointCloud with a ros Publisher
-     * \param width : the width of the point cloud
-     * \param height : the height of the point cloud
-     * \param pub_cloud : the publisher object to use
-     */
-    void publishPointCloud(int width, int height, ros::Publisher &pub_cloud)
-    {
-        pcl::PointCloud<pcl::PointXYZRGB> point_cloud;
-        point_cloud.width = width;
-        point_cloud.height = height;
-        int size = width*height;
-        point_cloud.points.resize(size);
-
-        sl::Vector4<float>* cpu_cloud = cloud.getPtr<sl::float4>();
-        for (int i = 0; i < size; i++) {
-            point_cloud.points[i].x = cpu_cloud[i][2];
-            point_cloud.points[i].y = -cpu_cloud[i][0];
-            point_cloud.points[i].z = -cpu_cloud[i][1];
-            point_cloud.points[i].rgb = cpu_cloud[i][3];
-        }
-
-        sensor_msgs::PointCloud2 output;
-        pcl::toROSMsg(point_cloud, output); // Convert the point cloud to a ROS message
-        output.header.frame_id = point_cloud_frame_id; // Set the header values of the ROS message
-        output.header.stamp = point_cloud_time;
-        output.height = height;
-        output.width = width;
-        output.is_bigendian = false;
-        output.is_dense = false;
-        pub_cloud.publish(output);
-    }
-#else
-    inline bool isValidPoint(const cv::Vec3f& pt)
-    {
-        // Check both for disparities explicitly marked as invalid (where OpenCV maps pt.z to MISSING_Z)
-        // and zero disparities (point mapped to infinity).
-        return pt[2] != image_geometry::StereoCameraModel::MISSING_Z && !std::isinf(pt[2]);
-    }
-
-    /* \brief Publish a pointCloud with a ros Publisher
-     * \param width : the width of the point cloud
-     * \param height : the height of the point cloud
-     * \param pub_cloud : the publisher object to use
-     */
-    //publishPointCloud(points_mat_, point_cloud_pub);
-    void publishPointCloud(cv::Mat_<cv::Vec3f> &dense_points_, const cv::Mat& color, ros::Publisher &pub_cloud)
-    {
-        cv::Mat_<cv::Vec3f> dense_points;
-        sensor_msgs::PointCloud2 points;
-        // Fill in sparse point cloud message
-        points.header.frame_id = "left_frame";
-        points.height = dense_points_.rows;
-        points.width  = dense_points_.cols;
-        points.fields.resize (4);
-        points.fields[0].name = "x";
-        points.fields[0].offset = 0;
-        points.fields[0].count = 1;
-        points.fields[0].datatype = sensor_msgs::PointField::FLOAT32;
-        points.fields[1].name = "y";
-        points.fields[1].offset = 4;
-        points.fields[1].count = 1;
-        points.fields[1].datatype = sensor_msgs::PointField::FLOAT32;
-        points.fields[2].name = "z";
-        points.fields[2].offset = 8;
-        points.fields[2].count = 1;
-        points.fields[2].datatype = sensor_msgs::PointField::FLOAT32;
-        points.fields[3].name = "rgb";
-        points.fields[3].offset = 12;
-        points.fields[3].count = 1;
-        points.fields[3].datatype = sensor_msgs::PointField::FLOAT32;
-        //points.is_bigendian = false; ???
-        points.point_step = 16;
-        points.row_step = points.point_step * points.width;
-        points.data.resize (points.row_step * points.height);
-        points.is_dense = false; // there may be invalid points
-        float bad_point = std::numeric_limits<float>::quiet_NaN ();
-        int i = 0;
-        for (int32_t u = 0; u < dense_points_.rows; ++u) {
-            for (int32_t v = 0; v < dense_points_.cols; ++v, ++i) {
-                if (isValidPoint(dense_points_(u,v))) {
-                    // x,y,z,rgba
-                    memcpy (&points.data[i * points.point_step + 0], &dense_points_(u,v)[0], sizeof (float));
-                    memcpy (&points.data[i * points.point_step + 4], &dense_points_(u,v)[1], sizeof (float));
-                    memcpy (&points.data[i * points.point_step + 8], &dense_points_(u,v)[2], sizeof (float));
-
-                }
-                else {
-                    memcpy (&points.data[i * points.point_step + 0], &bad_point, sizeof (float));
-                    memcpy (&points.data[i * points.point_step + 4], &bad_point, sizeof (float));
-                    memcpy (&points.data[i * points.point_step + 8], &bad_point, sizeof (float));
-                }
-            }
-        }
-
-        // Fill in color
-        namespace enc = sensor_msgs::image_encodings;
-        const std::string& encoding = enc::BGR8;
-        i = 0;
-        if (encoding == enc::MONO8) {
-            for (int32_t u = 0; u < dense_points_.rows; ++u) {
-                for (int32_t v = 0; v < dense_points_.cols; ++v, ++i) {
-                    if (isValidPoint(dense_points_(u,v))) {
-                        uint8_t g = color.at<uint8_t>(u,v);
-                        int32_t rgb = (g << 16) | (g << 8) | g;
-                        memcpy (&points.data[i * points.point_step + 12], &rgb, sizeof (int32_t));
-                    }
-                    else {
-                        memcpy (&points.data[i * points.point_step + 12], &bad_point, sizeof (float));
-                    }
-                }
-            }
-        }
-
-        else if (encoding == enc::RGB8) {
-            for (int32_t u = 0; u < dense_points_.rows; ++u) {
-                for (int32_t v = 0; v < dense_points_.cols; ++v, ++i) {
-                    if (isValidPoint(dense_points_(u,v))) {
-                        const cv::Vec3b& rgb = color.at<cv::Vec3b>(u,v);
-                        int32_t rgb_packed = (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
-                        memcpy (&points.data[i * points.point_step + 12], &rgb_packed, sizeof (int32_t));
-                    }
-                    else {
-                        memcpy (&points.data[i * points.point_step + 12], &bad_point, sizeof (float));
-                    }
-                }
-            }
-        }
-        else if (encoding == enc::BGR8) {
-            for (int32_t u = 0; u < dense_points_.rows; ++u) {
-                for (int32_t v = 0; v < dense_points_.cols; ++v, ++i) {
-                    if (isValidPoint(dense_points_(u,v))) {
-                        const cv::Vec3b& bgr = color.at<cv::Vec3b>(u,v);
-                        int32_t rgb_packed = (bgr[2] << 16) | (bgr[1] << 8) | bgr[0];
-                        memcpy (&points.data[i * points.point_step + 12], &rgb_packed, sizeof (int32_t));
-                    }
-                    else {
-                        memcpy (&points.data[i * points.point_step + 12], &bad_point, sizeof (float));
-                    }
-                }
-            }
-        }
-        else {
-            ROS_WARN("Could not fill color channel of the point cloud, unrecognized encoding '%s'", encoding.c_str());
-        }
-        pub_cloud.publish(points);
-    }
-#endif
-    void Rectification(cv::Mat& src_l, cv::Mat& src_r, cv::Mat& _map11, cv::Mat& _map12, cv::Mat& _map21, cv::Mat& _map22, cv::Mat& dst_l, cv::Mat& dst_r)
-    {
-        cv::Mat left = src_l;
-        cv::Mat right = src_r;
-
-        cv::Mat map11=_map11;
-        cv::Mat map12=_map12;
-        cv::Mat map21=_map21;
-        cv::Mat map22=_map22;
-
-        cv::Mat img1r, img2r;
-        cv::remap(left, img1r, map11, map12, cv::INTER_LINEAR);
-        cv::remap(right, img2r, map21, map22, cv::INTER_LINEAR);
-
-        dst_l = img1r;
-        dst_r = img2r;
-    }
-
-    void stereoMatch(cv::Mat left_mono, cv::Mat right_mono, cv::Mat& disparity, MatchingAlg alg = STEREO_BM)
-    {
-        cv::Mat left = left_mono;
-        cv::Mat right = right_mono;
-        cv::Mat disp;
-
-        if( alg == STEREO_BM )
-        {
-            // cout << "BM params: " << state.numDisparities << " " << state.SADWindowSize << endl;
-            cv::Ptr<cv::StereoBM> bm = cv::StereoBM::create(state.numDisparities, state.SADWindowSize);
-
-            // pre-filter
-            bm->setPreFilterType(state.preFilterType);
-            bm->setPreFilterSize(state.preFilterSize);
-            bm->setPreFilterCap(state.preFilterCap);
-            bm->setTextureThreshold(state.textureThreshold);
-            bm->setUniquenessRatio(state.uniquenessRatio);
-
-            bm->setMinDisparity(state.minDisparity);
-            // bm->setNumDisparities(state.numDisparities);
-            // bm->setBlockSize(state.SADWindowSize);
-            bm->setSpeckleWindowSize(state.speckleWindowSize);
-            bm->setSpeckleRange(state.speckleRange);
-            bm->setDisp12MaxDiff(state.disp12MaxDiff);
-            //            bm->setROI1(roi1);
-            //            bm->setROI2(roi2);
-
-            bm->compute(left, right, disp);
-        }
-        else if( alg == STEREO_SGBM || alg == STEREO_HH || alg == STEREO_3WAY || alg == STEREO_HH4 )
-        {
-            cv::Ptr<cv::StereoSGBM> sgbm = cv::StereoSGBM::create();
-
-            sgbm->setMinDisparity(state.minDisparity);
-            sgbm->setNumDisparities(state.numDisparities);
-            sgbm->setBlockSize(state.SADWindowSize);
-            sgbm->setP1(state.p1);
-            sgbm->setP2(state.p2);
-            sgbm->setDisp12MaxDiff(state.disp12MaxDiff);
-            sgbm->setPreFilterCap(state.preFilterCap);
-            sgbm->setUniquenessRatio(state.uniquenessRatio);
-            sgbm->setSpeckleWindowSize(state.speckleWindowSize);
-            sgbm->setSpeckleRange(state.speckleRange);
-
-            if(alg==STEREO_HH)
-                sgbm->setMode(cv::StereoSGBM::MODE_HH);
-            else if(alg==STEREO_SGBM)
-                sgbm->setMode(cv::StereoSGBM::MODE_SGBM);
-            else if(alg==STEREO_3WAY)
-                sgbm->setMode(cv::StereoSGBM::MODE_SGBM_3WAY);
-            else if(alg==STEREO_HH4)
-                sgbm->setMode(cv::StereoSGBM::MODE_HH4);
-
-            sgbm->compute(left, right, disp);
-        }
-        disparity = disp;
     }
 
     void device_poll() {
@@ -712,14 +431,6 @@ private:
         image_transport::Publisher left_image_pub = it.advertise("stereo/left/image_raw", 1);
         image_transport::Publisher right_image_pub = it.advertise("stereo/right/image_raw", 1);
 
-        // image_transport::Publisher left_rect_pub = it.advertise("stereo/left/image_rect", 1);
-        // image_transport::Publisher right_rect_pub = it.advertise("stereo/right/image_rect", 1);
-
-        // image_transport::Publisher disparity_image_pub = it.advertise("stereo/disparity_image", 1);
-        // image_transport::Publisher depth_pub = it.advertise("stereo/depth", 1);
-
-        // ros::Publisher point_cloud_pub = nh.advertise<sensor_msgs::PointCloud2> ("stereo/point_cloud", 1);
-
         ros::Publisher cam_time_stamp_pub = nh.advertise<sensor_msgs::TimeReference>("stereo/timestamp",1);
         ros::Publisher left_cam_info_pub = nh.advertise<sensor_msgs::CameraInfo>("stereo/left/camera_info", 1);
         ros::Publisher right_cam_info_pub = nh.advertise<sensor_msgs::CameraInfo>("stereo/right/camera_info", 1);
@@ -733,69 +444,25 @@ private:
         camera_info_manager::CameraInfoManager info_manager(nh);
 
         info_manager.setCameraName("left");
-        info_manager.loadCameraInfo( "package://ocams_1cgn/config/left.yaml");
+        info_manager.loadCameraInfo( "package://ocams_1cgn/config/calib/left.yaml");
         left_info = info_manager.getCameraInfo();
 
         info_manager.setCameraName("right");
-        info_manager.loadCameraInfo( "package://ocams_1cgn/config/right.yaml");
+        info_manager.loadCameraInfo( "package://ocams_1cgn/config/calib/right.yaml");
         right_info = info_manager.getCameraInfo();
 
         left_info.header.frame_id = left_frame_id_;
         right_info.header.frame_id = right_frame_id_;
 
-        /**********************************************************************************************************/
-        float scale = 1.f;
-        cv::Mat Q = cv::Mat::zeros(4, 4, CV_64F);
-        cv::Mat map11, map12, map21, map22;
-
-        cv::Size img_size = cv::Size(ocams->width_, ocams->height_);
-
-        // reading intrinsic parameters
-        cv::Mat M1, D1, M2, D2;
-
-        M1 = cv::Mat(3, 3, CV_64F, &left_info.K);
-        M2 = cv::Mat(3, 3, CV_64F, &right_info.K);
-
-        D1 = cv::Mat(1, 5, CV_64F, &left_info.D.at(0));
-        D2 = cv::Mat(1, 5, CV_64F, &right_info.D.at(0));
-
-        M1 *= scale;
-        M2 *= scale;
-
-        cv::Mat R, T, R1, P1, R2, P2;
-
-        R1 = cv::Mat(3, 3, CV_64F, &left_info.R);
-        P1 = cv::Mat(3, 4, CV_64F, &left_info.P);
-        R2 = cv::Mat(3, 3, CV_64F, &right_info.R);
-        P2 = cv::Mat(3, 4, CV_64F, &right_info.P);
-
-        cv::initUndistortRectifyMap(M1, D1, R1, P1, img_size, CV_32FC1, map11, map12);
-        cv::initUndistortRectifyMap(M2, D2, R2, P2, img_size, CV_32FC1, map21, map22);
-
-        double Tx = 0.12;   //baseline
-        double focal = P2.at<double>(0,0);
-        Q.at<double>(0,0) = Q.at<double>(1,1) = 1.0;
-        Q.at<double>(0,3) = -P2.at<double>(0,2);
-        Q.at<double>(1,3) = -P2.at<double>(1,2);
-        Q.at<double>(2,3) = P2.at<double>(0,0);
-        Q.at<double>(3,2) = 1.0 / Tx;
-
-        std::cout << Q << std::endl;
         ROS_INFO("Got camera calibration files");
 
         /******************************************************************************************************************/
 
         // loop to publish images;
-        //        cv::Mat left_image, right_image;
         cv::Mat left_raw, right_raw;
         cv::Mat left_rgb, right_rgb;
-        cv::Mat left_mono, right_mono;
-        cv::Mat left_rect_color, right_rect_color;
-        cv::Mat left_rect_mono, right_rect_mono;
-        cv::Mat disp16, disp8;
 
         uint32_t time_stamp, sec, nsec;
-
 
         while (ros::ok())
         {
@@ -810,19 +477,7 @@ private:
 
             // /****************** Rectification *****************/
             cv::cvtColor(left_raw, left_rgb, CV_BayerGR2RGB);
-            cv::cvtColor(right_raw, right_mono, CV_BayerGR2RGB);
-
-            // Rectification(left_rgb, right_mono, map11, map12, map21, map22, left_rect_color, right_rect_mono);
-            // cv::cvtColor(left_rect_color, left_rect_mono, CV_BGR2GRAY);
-
-            // // STEREO_BM=0, STEREO_SGBM=1, STEREO_HH=2, STEREO_3WAY=3, STEREO_HH4=4
-            // stereoMatch(left_rect_mono, right_rect_mono, disp16, state.mode);
-
-            // // depth
-            // cv::Mat disp32;
-            // disp16.convertTo(disp32, CV_32F, 1./16);
-            // cv::Mat_<cv::Vec3f> points;
-            // cv::reprojectImageTo3D(disp32, points, Q, true, CV_32F);
+            cv::cvtColor(right_raw, right_rgb, CV_BayerGR2RGB);
 
             /* time stamp publish */
             sec = (uint32_t)time_stamp/1000;
@@ -840,7 +495,7 @@ private:
                 publishImage(left_rgb, left_image_pub, "left_frame", now, sensor_msgs::image_encodings::BGR8);
             }
             if (right_image_pub.getNumSubscribers() > 0) {
-                publishImage(right_mono, right_image_pub, "right_frame", now, sensor_msgs::image_encodings::BGR8);
+                publishImage(right_rgb, right_image_pub, "right_frame", now, sensor_msgs::image_encodings::BGR8);
             }
             if (left_cam_info_pub.getNumSubscribers() > 0) {
                 publishCamInfo(left_cam_info_pub, left_info, now);
@@ -848,43 +503,6 @@ private:
             if (right_cam_info_pub.getNumSubscribers() > 0) {
                 publishCamInfo(right_cam_info_pub, right_info, now);
             }
-            // if (left_rect_pub.getNumSubscribers() > 0) {
-            //     publishImage(left_rect_color, left_rect_pub, "left_frame", now, sensor_msgs::image_encodings::BGR8);
-            // }
-            // if (right_rect_pub.getNumSubscribers() > 0) {
-            //     publishImage(right_rect_mono, right_rect_pub, "left_frame", now, sensor_msgs::image_encodings::MONO8);
-            // }
-
-            // if (disparity_image_pub.getNumSubscribers() > 0) {
-            //     disp16.convertTo(disp8, CV_8U, 255/(state.numDisparities*16.));
-            //     cv::Mat disp_bgr;
-            //     cv::applyColorMap(disp8, disp_bgr, cv::COLORMAP_JET);
-            //     publishImage(disp_bgr, disparity_image_pub, "left_frame", now, sensor_msgs::image_encodings::BGR8);
-            // }
-            // if (depth_pub.getNumSubscribers() > 0) {
-            //     cv::Mat depth32f;
-            //     int min_disparity = 0;
-            //     int max_disparity = 128;
-
-            //     depth32f = cv::Mat::zeros(disp32.rows, disp32.cols, CV_32F);
-            //     for (int i = 0; i < disp32.rows; i++)
-            //     {
-            //         for (int j = 0; j < disp16.cols; j++)
-            //         {
-            //             float disparity_value = (float)disp32.at<float>(i,j);
-            //             if (disparity_value > min_disparity && disparity_value < max_disparity)
-            //             {
-            //                 // baseline * focal / disparity
-            //                 float depth = Tx * focal / disparity_value;
-            //                 depth32f.at<float>(i,j) = depth;
-            //             }
-            //         }
-            //     }
-            //     publishDepth(depth32f, depth_pub, "left_frame", now, 0);
-            // }
-            // if (point_cloud_pub.getNumSubscribers() > 0) {
-            //     publishPointCloud(points, left_rect_color, point_cloud_pub);
-            // }
 
             if (show_image_) {
                 cv::imshow("left", left_rgb);
@@ -896,33 +514,6 @@ private:
 
     void callback(ocams_1cgn::camConfig &config, uint32_t level) {
         ocams->uvc_control(config.exposure, config.gain, config.wb_blue, config.wb_red, config.auto_exposure);
-
-        state.mode = (MatchingAlg)config.stereo_algorithm;
-        state.preFilterType = config.prefilter_type;
-        if(config.prefilter_size % 2 == 0)
-            config.prefilter_size--;
-        state.preFilterSize = config.prefilter_size;
-        state.preFilterCap = config.prefilter_cap;
-        if( (config.stereo_algorithm == 0) && (config.correlation_window_size<5) )
-        {
-            config.correlation_window_size = 5;
-        }
-        if(config.correlation_window_size % 2 == 0)
-        {
-            config.correlation_window_size--;
-        }
-        state.SADWindowSize = config.correlation_window_size;
-        state.minDisparity = config.min_disparity;
-        if(config.disparity_range % 16 != 0)
-            config.disparity_range = config.disparity_range/16*16;
-        state.numDisparities = config.disparity_range;
-        state.textureThreshold = config.texture_threshold;
-        state.uniquenessRatio = config.uniqueness_ratio;
-        state.speckleRange = config.speckle_range;
-        state.speckleWindowSize = config.speckle_size;
-        state.disp12MaxDiff = config.disp12MaxDiff;
-        state.p1 = config.P1;
-        state.p2 = config.P2;
     }
 
 
