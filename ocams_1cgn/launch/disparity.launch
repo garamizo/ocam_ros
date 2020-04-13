@@ -2,13 +2,15 @@
 <launch>
 
   <!-- Choose algorithm -->
-  <arg name="rqt_reconfigure" default="true" />
+  <arg name="rqt_reconfigure" default="false" />
+  <arg name="rviz" default="false" />
 
 <!--
   <include file="$(find ocams_1cgn)/launch/ocams_ros.launch" />
   -->
   
-  <node pkg="rosbag" type="play" name="player" output="screen" args="--clock /home/garamizo/mocap_laptop.bag -l -r 0.1 -s 15 -u 10"/>
+  <node pkg="rosbag" type="play" name="player" output="screen" 
+        args="--clock /home/garamizo/mocap_laptop.bag -l -r 1 -s 15 -u 20"/>
   
   <arg name="pi/2" value="1.5707963267948966" />
   <arg name="optical_rotate" value="0 0.06 0 0 0 0 1" />
@@ -19,10 +21,10 @@
   <node pkg="tf2_ros" type="static_transform_publisher" name="ocams_camera_link2"
     args="0 -0.06 0 -$(arg pi/2) 0 -$(arg pi/2) base_link right_frame" />
     
-  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find ocams_1cgn)/config/rviz/disparity_tuning.rviz"/>
+  <node if="$(arg rviz)" pkg="rviz" type="rviz" name="rviz" args="-d $(find ocams_1cgn)/config/rviz/disparity_tuning.rviz"/>
 
 
-  <group ns="/stereo" >
+  <!-- <group ns="/stereo" >
     <node pkg="stereo_image_proc" type="stereo_image_proc" name="stereo_image_proc">
       <param name="stereo_algorithm" value="0"/>
       <param name="disparity_range" value="64"/>
@@ -31,15 +33,39 @@
       <param name="P1" value="600"/>
       <param name="P2" value="2400"/>
     </node>
+  </group> -->
+
+  <group ns="/stereo" >
+    <include file="$(find stereo_image_proc)/launch/stereo_image_proc.launch" >
+      <arg name="manager" value="/manager" />
+    </include>
   </group>
 
-  <!-- <node pkg="nodelet" type="nodelet" name="standalone_nodelet"  args="manager"/> -->
+  <!-- <node pkg="nodelet" type="nodelet" name="standalone_nodelet"  args="/manager"/> -->
 
-  <include file="$(find drone_tracker)/launch/visual_tracking.launch" >
+  <!-- Run a VoxelGrid filter to clean NaNs and downsample the data -->
+  <!-- <arg name="manager" default="manager" />
+  <node pkg="nodelet" type="nodelet" name="voxel_grid" args="load pcl/VoxelGrid $(arg manager)" output="screen">
+    <remap from="~input" to="/stereo/points2" />
+    <rosparam>
+      leaf_size: 0.1
+      filter_field_name: z 
+      filter_limit_min: 0.1   # increase to speed-up
+      filter_limit_max: 15.0  # lower to speed-up
+      max_queue_size: 1  # should prevent latency
+    </rosparam>
+  </node>
+
+  <node pkg="drone_tracker" type="detect_clusters" name="detect_clusters" output="screen">
+    <remap from="points2" to="/stereo/points2"/>
+    <remap from="points2" to="/voxel_grid/output"/>
+    </node> -->
+
+  <include file="$(find drone_tracker)/launch/visual_tracking2.launch" >
     <arg name="camera_frame" value="left_frame"/>
     <arg name="gui" value="false"/>
     <arg name="points_topic" value="/stereo/points2"/>
-    <arg name="manager" value="nodelet_manager" />
+    <arg name="manager" value="/manager" />
   </include>
 
     <!-- <node pkg="image_view" type="stereo_view" name="stereo_view">

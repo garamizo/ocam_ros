@@ -42,9 +42,9 @@ include_directories(
     ${OpenCV_INCLUDE_DIRS}
 )
 
-# add_executable(ocams_1cgn src/oCamS.cpp src/withrobot_camera.cpp src/withrobot_utility.cpp)
-# target_link_libraries(ocams_1cgn ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} -lv4l2 -ludev)
-# add_dependencies(ocams_1cgn ${PROJECT_NAME}_gencfg)
+add_executable(ocams_1cgn src/oCamS.cpp src/withrobot_camera.cpp src/withrobot_utility.cpp)
+target_link_libraries(ocams_1cgn ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} -lv4l2 -ludev)
+add_dependencies(ocams_1cgn ${PROJECT_NAME}_gencfg)
 
 
 add_executable(ocams_minimal src/oCamS_minimal.cpp src/withrobot_camera.cpp src/withrobot_utility.cpp)

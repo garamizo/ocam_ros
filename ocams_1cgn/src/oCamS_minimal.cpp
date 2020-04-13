@@ -25,7 +25,7 @@
 #include <opencv2/core/utility.hpp>
 #include <opencv2/ximgproc/disparity_filter.hpp>
 #include <opencv2/imgproc.hpp>
-// #include <opencv2/xfeatures2d.hpp>
+#include <opencv2/xfeatures2d.hpp>
 #include <opencv2/features2d.hpp>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -33,7 +33,7 @@
 #include "myahrs_plus.hpp"
 
 using namespace cv;
-// using namespace cv::xfeatures2d;
+using namespace cv::xfeatures2d;
 using namespace cv::ximgproc;
 using namespace std;
 
